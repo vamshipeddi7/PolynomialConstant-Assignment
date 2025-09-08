@@ -1,28 +1,58 @@
-import org.json.JSONObject;
-import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.nio.file.*;
 import java.math.BigInteger;
+import java.util.*;
+import java.util.regex.*;
 
 public class PolynomialConstant {
     public static void main(String[] args) {
         try {
-            String data = new String(Files.readAllBytes(Paths.get("testcase1.json")));
-            JSONObject all = new JSONObject(data);
-            JSONObject keys = all.getJSONObject("keys");
-            int k = keys.getInt("k");
-            BigInteger[] x = new BigInteger[k];
-            BigInteger[] y = new BigInteger[k];
-            for (int i = 1; i <= k; i++) {
-                JSONObject point = all.getJSONObject(String.valueOf(i));
-                int base = Integer.parseInt(point.getString("base"));
-                String value = point.getString("value");
-                x[i - 1] = BigInteger.valueOf(i);
-                y[i - 1] = new BigInteger(value, base);
-            }
-            BigInteger c = lagrangeAtZero(x, y, k);
-            System.out.println(c);
+            // List all JSON files in current folder
+            Files.list(Paths.get("."))
+                 .filter(p -> p.toString().endsWith(".json"))
+                 .forEach(PolynomialConstant::processFile);
         } catch (Exception e) {
             e.printStackTrace();
+        }
+    }
+
+    private static void processFile(Path filePath) {
+        try {
+            String data = new String(Files.readAllBytes(filePath));
+
+            // Extract k
+            Matcher keyMatcher = Pattern.compile("\"k\"\\s*:\\s*(\\d+)").matcher(data);
+            int k = 0;
+            if (keyMatcher.find()) {
+                k = Integer.parseInt(keyMatcher.group(1));
+            } else {
+                throw new RuntimeException("Could not find 'k' in " + filePath);
+            }
+
+            // Extract first k points
+            BigInteger[] x = new BigInteger[k];
+            BigInteger[] y = new BigInteger[k];
+
+            Matcher entryMatcher = Pattern.compile("\"(\\d+)\"\\s*:\\s*\\{\\s*\"base\"\\s*:\\s*\"(\\d+)\",\\s*\"value\"\\s*:\\s*\"([^\"]+)\"\\s*\\}").matcher(data);
+
+            int count = 0;
+            while (entryMatcher.find() && count < k) {
+                int base = Integer.parseInt(entryMatcher.group(2));
+                String value = entryMatcher.group(3);
+
+                x[count] = BigInteger.valueOf(count + 1);
+                y[count] = new BigInteger(value, base);
+                count++;
+            }
+
+            if (count < k) {
+                throw new RuntimeException("Not enough points in " + filePath + " to satisfy k=" + k);
+            }
+
+            BigInteger c = lagrangeAtZero(x, y, k);
+            System.out.println(filePath.getFileName() + " -> Constant c = " + c);
+
+        } catch (Exception e) {
+            System.err.println("Error processing " + filePath + ": " + e.getMessage());
         }
     }
 
